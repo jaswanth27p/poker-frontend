@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 
     // Remove the user from the room's users array
     room.users = room.users.filter((id: any) => id !== userId);
-    room.users = room.userNames.filter((name: any) => name !== userName);
+    room.userNames = room.userNames.filter((name: any) => name !== userName);
     await room.save();
 
     return NextResponse.json({ isUserKicked: true }, { status: 200 });
