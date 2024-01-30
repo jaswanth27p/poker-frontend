@@ -17,7 +17,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
   // Connect socket when the component mounts
   React.useEffect(() => {
-    const newSocket = io("https://poker-n369.onrender.com");
+    const newSocket = io("http://localhost:5000");
+    // const newSocket = io("https://poker-n369.onrender.com");
     setSocket(newSocket);
     
     return () => {
