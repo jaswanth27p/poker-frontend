@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useSocket } from "./SocketContext";
 import { User } from "next-auth";
 import { usePathname } from "next/navigation";
-import {CardUI,WinnerCardUI} from "../_components/Cards"
+import { CardUI, WinnerCardUI } from "../_components/Cards";
 
 interface Card {
   suit: string;
@@ -24,7 +24,7 @@ interface WinnerInfo {
 }
 
 interface Player {
-  id:string;
+  id: string;
   name: string;
   hand: Card[];
   chips: number;
@@ -56,18 +56,22 @@ const Game = ({ user }: { user: User | undefined }) => {
   useEffect(() => {
     if (socket) {
       socket.on("game_state", (data: GameState) => {
-        const maxBet = Math.max(...data.players.map((player) => player.bet));
-        const currentPlayerBet = data.players[data.currentPlayerIndex].bet;
-        setCallBet(maxBet - currentPlayerBet);
-        setGameState(data);
+        if (data.players) {
+          const maxBet = Math.max(...data.players.map((player) => player.bet));
+          const currentPlayerBet = data.players[data.currentPlayerIndex].bet;
+          setCallBet(maxBet - currentPlayerBet);
+          setGameState(data);
+        }
       });
 
-      socket.on("winner", ({ winner  }: { winner: any  }) => {
+      socket.on("winner", ({ winner }: { winner: any }) => {
         setWinnerInfo(winner.handInfo);
         const log = winner.name + " is the winner !";
         socket.emit("game_log", { roomId, log });
         setTimeout(() => {
           setWinnerInfo(null);
+          socket.emit("reset_game", { roomId });
+          socket.emit("get_game_state", { roomId });
         }, 15000);
       });
 
@@ -97,7 +101,7 @@ const Game = ({ user }: { user: User | undefined }) => {
   }, [gameState, userId]);
 
   useEffect(() => {
-    if (countdown === 0) {
+    if (countdown <= 0) {
       if (socket) {
         const action = "fold";
         socket.emit("player_action", { roomId, userId, action, callBet });
@@ -207,4 +211,3 @@ const Game = ({ user }: { user: User | undefined }) => {
 };
 
 export default Game;
-
