@@ -51,6 +51,7 @@ const Game = ({ user }: { user: User | undefined }) => {
   const [countdown, setCountdown] = useState<number>(30);
   const [winnerInfo, setWinnerInfo] = useState<WinnerInfo | null>(null);
   const [winnerName, setWinnerName] = useState(null);
+  const [timer, setTimer] = useState<number | null>(null);
   const userId = user?.id;
   const userName = user?.name;
 
@@ -80,6 +81,10 @@ const Game = ({ user }: { user: User | undefined }) => {
         }, 15000);
       });
 
+       socket.on("timer", ({ prevCount }: { prevCount: number }) => {
+         setTimer(prevCount);
+       });
+
       return () => {
         socket.disconnect();
       };
@@ -93,20 +98,23 @@ const Game = ({ user }: { user: User | undefined }) => {
     if (
       gameState?.players &&
       gameState.players[gameState.currentPlayerIndex]?.id === userId &&
-      gameState.players.length > 1 
+      gameState.players.length > 1
     ) {
       setCountdown(30);
-      autoFoldExecuted = false; 
+      autoFoldExecuted = false;
       countdownInterval = setInterval(() => {
         setCountdown((prevCount) => {
           if (prevCount === 1 && !autoFoldExecuted) {
             if (socket) {
-              autoFoldExecuted = true;  
+              autoFoldExecuted = true;
               const action = "fold";
               socket.emit("player_action", { roomId, userId, action, callBet });
               const log = userName + " " + action + "ed";
               socket.emit("game_log", { roomId, log });
             }
+          }
+          if (socket) {
+            socket.emit("timer", { roomId, prevCount });
           }
           return prevCount - 1;
         });
@@ -133,29 +141,30 @@ const Game = ({ user }: { user: User | undefined }) => {
   return (
     <div>
       {/* Buttons for actions */}
-      {gameState?.players[gameState.currentPlayerIndex]?.id === userId && !winnerName && (
-        <div>
-          <hr></hr>
-          <button
-            className="border p-2 m-2 inline-block"
-            onClick={() => handleAction("fold")}
-          >
-            Fold
-          </button>
-          <button
-            className="border p-2 m-2 inline-block"
-            onClick={() => handleAction("call")}
-          >
-            Call {callBet > 0 && `(${callBet})`}
-          </button>
-          <button
-            className="border p-2 m-2 inline-block"
-            onClick={() => handleAction("raise")}
-          >
-            Raise {callBet > 0 && `(${callBet + 10})`}
-          </button>
-        </div>
-      )}
+      {gameState?.players[gameState.currentPlayerIndex]?.id === userId &&
+        !winnerName && (
+          <div>
+            <hr></hr>
+            <button
+              className="border p-2 m-2 inline-block"
+              onClick={() => handleAction("fold")}
+            >
+              Fold
+            </button>
+            <button
+              className="border p-2 m-2 inline-block"
+              onClick={() => handleAction("call")}
+            >
+              Call {callBet > 0 && `(${callBet})`}
+            </button>
+            <button
+              className="border p-2 m-2 inline-block"
+              onClick={() => handleAction("raise")}
+            >
+              Raise {callBet > 0 && `(${callBet + 10})`}
+            </button>
+          </div>
+        )}
       <h1>Game State:</h1>
       {gameState && (
         <div>
@@ -168,10 +177,10 @@ const Game = ({ user }: { user: User | undefined }) => {
                 <p>
                   Chips: {player.chips} - Bet: {player.bet}
                 </p>
-                {player.id ===
+                {/* {player.id ===
                   gameState.players[gameState.currentPlayerIndex].id && (
                   <p>Time left: {countdown}s</p>
-                )}
+                )} */}
                 {player.hand.length > 0 && userId === player.id && (
                   <div className="flex space-x-2">
                     <CardUI card={player.hand[0]} />
