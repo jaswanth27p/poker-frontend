@@ -50,11 +50,13 @@ const Game = ({ user }: { user: User | undefined }) => {
   const [callBet, setCallBet] = useState<number>(0);
   const [countdown, setCountdown] = useState<number>(30);
   const [winnerInfo, setWinnerInfo] = useState<WinnerInfo | null>(null);
+  const [winnerName, setWinnerName] = useState(null);
   const userId = user?.id;
   const userName = user?.name;
 
   useEffect(() => {
     if (socket) {
+      socket.emit("get_game_state", { roomId, userId });
       socket.on("game_state", (data: GameState) => {
         if (data.players) {
           const maxBet = Math.max(...data.players.map((player) => player.bet));
@@ -66,12 +68,15 @@ const Game = ({ user }: { user: User | undefined }) => {
 
       socket.on("winner", ({ winner }: { winner: any }) => {
         setWinnerInfo(winner.handInfo);
+        setWinnerName(winner.name);
         const log = winner.name + " is the winner !";
         socket.emit("game_log", { roomId, log });
         setTimeout(() => {
           setWinnerInfo(null);
-          socket.emit("reset_game", { roomId });
-          socket.emit("get_game_state", { roomId });
+          setWinnerName(null);
+          if (winner.id == userId) {
+            socket.emit("reset_game", { roomId });
+          }
         }, 15000);
       });
 
@@ -79,37 +84,39 @@ const Game = ({ user }: { user: User | undefined }) => {
         socket.disconnect();
       };
     }
-  }, [roomId, socket]);
+  }, [roomId, socket, userId]);
 
   useEffect(() => {
     let countdownInterval: NodeJS.Timeout;
+    let autoFoldExecuted = false;
 
     if (
       gameState?.players &&
       gameState.players[gameState.currentPlayerIndex]?.id === userId &&
-      gameState.players.length > 1
+      gameState.players.length > 1 
     ) {
       setCountdown(30);
+      autoFoldExecuted = false; 
       countdownInterval = setInterval(() => {
-        setCountdown((prevCount) => prevCount - 1);
+        setCountdown((prevCount) => {
+          if (prevCount === 1 && !autoFoldExecuted) {
+            if (socket) {
+              autoFoldExecuted = true;  
+              const action = "fold";
+              socket.emit("player_action", { roomId, userId, action, callBet });
+              const log = userName + " " + action + "ed";
+              socket.emit("game_log", { roomId, log });
+            }
+          }
+          return prevCount - 1;
+        });
       }, 1000);
     }
 
     return () => {
       clearInterval(countdownInterval);
     };
-  }, [gameState, userId]);
-
-  useEffect(() => {
-    if (countdown <= 0) {
-      if (socket) {
-        const action = "fold";
-        socket.emit("player_action", { roomId, userId, action, callBet });
-        const log = userName + " " + action + "ed";
-        socket.emit("game_log", { roomId, log });
-      }
-    }
-  }, [callBet, countdown, roomId, socket, userId, userName]);
+  }, [gameState, userId, roomId, callBet, socket, userName]);
 
   const handleAction = (action: String) => {
     if (socket) {
@@ -126,7 +133,7 @@ const Game = ({ user }: { user: User | undefined }) => {
   return (
     <div>
       {/* Buttons for actions */}
-      {gameState?.players[gameState.currentPlayerIndex]?.id === userId && (
+      {gameState?.players[gameState.currentPlayerIndex]?.id === userId && !winnerName && (
         <div>
           <hr></hr>
           <button
@@ -191,6 +198,7 @@ const Game = ({ user }: { user: User | undefined }) => {
           {winnerInfo && (
             <div>
               <h2>Winning Cards:</h2>
+              <p>{winnerName}</p>
               <p>
                 Cards:
                 <ul className="flex space-x-2">
