@@ -31,7 +31,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${inter.className} text-black no-scrollbar bg-white dark:text-white dark:bg-black h-screen`}
+        className={`${inter.className} text-black  no-scrollbar bg-white dark:text-white dark:bg-black h-screen`}
       >
         <Header />
         {children}

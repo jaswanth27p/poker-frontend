@@ -1,11 +1,9 @@
-"use client"
+"use client";
 import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { useSocket } from "./SocketContext";
 import { usePathname, useRouter } from "next/navigation";
 import UserList from "./UsersList";
 import { User } from "next-auth";
-
- 
 
 export default function Chat({ user }: { user: User | undefined }) {
   const [messages, setMessages] = useState<string[]>([]);
@@ -28,11 +26,19 @@ export default function Chat({ user }: { user: User | undefined }) {
         setMessages((prevMessages) => [...prevMessages, message]);
       });
 
-      socket.on("user_list", ({userList,userNames}: {userList : string[],userNames :string[]}) => {
-        
-        setUserList(userList);
-        setUserNames(userNames);
-      });
+      socket.on(
+        "user_list",
+        ({
+          userList,
+          userNames,
+        }: {
+          userList: string[];
+          userNames: string[];
+        }) => {
+          setUserList(userList);
+          setUserNames(userNames);
+        }
+      );
 
       socket.on("game_log", (log: string) => {
         setGameLogs((prevLogs) => [...prevLogs, log]);
@@ -63,14 +69,14 @@ export default function Chat({ user }: { user: User | undefined }) {
     }
   };
 
-  const handleKickUser = async (userId: string,userName:string) => {
+  const handleKickUser = async (userId: string, userName: string) => {
     try {
       const response = await fetch("/api/room/kickUser", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ roomId, userId ,userName }),
+        body: JSON.stringify({ roomId, userId, userName }),
       });
 
       if (response.ok) {
@@ -97,16 +103,19 @@ export default function Chat({ user }: { user: User | undefined }) {
   };
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className=" ">
       {/* User List */}
-      <div className="flex flex-col h-1/3  m-auto items-start p-4">
+      <div className="m-auto ">
         <UserList
           userList={userList}
           userNames={userNames}
-          onKickUser={(userId: string,userName:string) => handleKickUser(userId,userName)}
+          onKickUser={(userId: string, userName: string) =>
+            handleKickUser(userId, userName)
+          }
+          startBtn={true}
         />
       </div>
-      <div className="h-1/3 no-scrollbar  overflow-y-auto m-auto">
+      {/* <div className="h-1/3 no-scrollbar  overflow-y-auto m-auto">
         <div className="font-bold text-xl mb-4">Log :</div>
         <ul>
           {gameLogs
@@ -118,10 +127,10 @@ export default function Chat({ user }: { user: User | undefined }) {
               </li>
             ))}
         </ul>
-      </div>
+      </div> */}
 
       {/* Chat Section */}
-      <div className="overflow-y-auto no-scrollbar h-1/3 p-4 flex-grow">
+      {/* <div className="overflow-y-auto no-scrollbar h-1/3 p-4 flex-grow">
         <form onSubmit={sendMessage} className="flex flex-col">
           <div className="font-bold text-xl mb-4">Chat :</div>
           <div className=" flex items-center mt-2">
@@ -146,7 +155,7 @@ export default function Chat({ user }: { user: User | undefined }) {
             </ul>
           </div>
         </form>
-      </div>
+      </div> */}
     </div>
   );
 }

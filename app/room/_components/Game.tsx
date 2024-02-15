@@ -4,6 +4,7 @@ import { useSocket } from "./SocketContext";
 import { User } from "next-auth";
 import { usePathname } from "next/navigation";
 import { CardUI, WinnerCardUI } from "../_components/Cards";
+import UsersList from "./UsersList";
 
 interface Card {
   suit: string;
@@ -49,6 +50,8 @@ const Game = ({ user }: { user: User | undefined }) => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [callBet, setCallBet] = useState<number>(0);
   const [countdown, setCountdown] = useState<number>(30);
+  const [userList, setUserList] = useState<string[]>([]);
+  const [userNames, setUserNames] = useState<string[]>([]);
   const [winnerInfo, setWinnerInfo] = useState<WinnerInfo | null>(null);
   const [winnerName, setWinnerName] = useState(null);
   const [timer, setTimer] = useState<number | null>(null);
@@ -57,6 +60,7 @@ const Game = ({ user }: { user: User | undefined }) => {
 
   useEffect(() => {
     if (socket) {
+      socket.emit("join_room", { roomId, userId });
       socket.emit("get_game_state", { roomId, userId });
       socket.on("game_state", (data: GameState) => {
         if (data.players) {
@@ -81,9 +85,19 @@ const Game = ({ user }: { user: User | undefined }) => {
         }, 15000);
       });
 
-       socket.on("timer", ({ prevCount }: { prevCount: number }) => {
-         setTimer(prevCount);
-       });
+      socket.on(
+        "user_list",
+        ({
+          userList,
+          userNames,
+        }: {
+          userList: string[];
+          userNames: string[];
+        }) => {
+          setUserList(userList);
+          setUserNames(userNames);
+        }
+      );
 
       return () => {
         socket.disconnect();
@@ -133,96 +147,173 @@ const Game = ({ user }: { user: User | undefined }) => {
       socket.emit("game_log", { roomId, log });
     }
   };
+  const handleKickUser = async (userId: string, userName: string) => {
+    try {
+      const response = await fetch("/api/room/kickUser", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ roomId, userId, userName }),
+      });
+
+      if (response.ok) {
+        const isSuccess = await response.json();
+        if (isSuccess) {
+          console.log(`User ${userId} kicked successfully.`);
+          const updatedUserList = userList.filter((user) => user !== userId);
+          setUserList(updatedUserList);
+          if (socket) {
+            socket.emit("kick_out", { userId, roomId });
+          }
+        } else {
+          console.log(`Failed to kick user ${userId}.`);
+        }
+      } else {
+        console.log(
+          `Failed to kick user ${userId}. Server returned ${response.status}.`
+        );
+      }
+    } catch (error) {
+      console.log(error);
+      alert("kick out failed");
+    }
+  };
 
   if (!gameState || gameState.players.length < 2) {
-    return <div>No game in progress</div>;
+    return (
+      <>
+        {" "}
+        <div>No game in progress</div>
+        <UsersList
+          userList={userList}
+          userNames={userNames}
+          onKickUser={(userId: string, userName: string) =>
+            handleKickUser(userId, userName)
+          }
+          startBtn={true}
+        />
+      </>
+    );
   }
 
   return (
     <div>
-      {/* Buttons for actions */}
-      {gameState?.players[gameState.currentPlayerIndex]?.id === userId &&
-        !winnerName && (
-          <div>
-            <hr></hr>
-            <button
-              className="border p-2 m-2 inline-block"
-              onClick={() => handleAction("fold")}
-            >
-              Fold
-            </button>
-            <button
-              className="border p-2 m-2 inline-block"
-              onClick={() => handleAction("call")}
-            >
-              Call {callBet > 0 && `(${callBet})`}
-            </button>
-            <button
-              className="border p-2 m-2 inline-block"
-              onClick={() => handleAction("raise")}
-            >
-              Raise {callBet > 0 && `(${callBet + 10})`}
-            </button>
-          </div>
-        )}
-      <h1>Game State:</h1>
+      <UsersList
+        userList={userList}
+        userNames={userNames}
+        onKickUser={(userId: string, userName: string) =>
+          handleKickUser(userId, userName)
+        }
+        startBtn={false}
+      />
+
       {gameState && (
-        <div>
-          <h2>Players:</h2>
-          <ul>
-            {gameState.players.map((player, index) => (
-              <li key={index}>
-                <hr></hr>
-                <strong>{`Player ${index + 1}: ${player.name}`}</strong>
-                <p>
-                  Chips: {player.chips} - Bet: {player.bet}
-                </p>
-                {/* {player.id ===
-                  gameState.players[gameState.currentPlayerIndex].id && (
-                  <p>Time left: {countdown}s</p>
-                )} */}
-                {player.hand.length > 0 && userId === player.id && (
-                  <div className="flex space-x-2">
-                    <CardUI card={player.hand[0]} />
-                    <CardUI card={player.hand[1]} />
+        <div className="grid grid-rows-2 gap-4">
+          <div className="border p-2 m-2">
+            <ul className="flex flex-wrap justify-center">
+              {gameState.players.map((player, index) => (
+                <div key={index} className="w-1/6">
+                  {userId !== player.id && (
+                    <li key={index} className="border m-1 p-1 ">
+                      <strong>{`${index + 1}: ${player.name}`}</strong>
+                      <p>
+                        Chips: {player.chips} - Bet: {player.bet}
+                      </p>
+                      {winnerInfo && userId !== player.id && (
+                        <div>
+                          <div className="flex space-x-2">
+                            <CardUI card={player.hand[0]} />
+                            <CardUI card={player.hand[1]} />
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  )}
+                </div>
+              ))}
+            </ul>
+          </div>
+          <div className="p-2 m-2 border grid grid-cols-3 gap-4 ">
+            <div>
+              <h2>Community Cards:</h2>
+              <ul className="flex flex-shrink-0 space-x-2">
+                {gameState.communityCards.map((card, index) => (
+                  <li key={index} className="w-1/6">
+                    <CardUI card={card} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="text-center">
+              {gameState?.players[gameState.currentPlayerIndex]?.id ===
+                userId &&
+                !winnerName && (
+                  <div>
+                    <button
+                      className="border p-2 m-2 inline-block"
+                      onClick={() => handleAction("fold")}
+                    >
+                      Fold
+                    </button>
+                    <button
+                      className="border p-2 m-2 inline-block"
+                      onClick={() => handleAction("call")}
+                    >
+                      Call {callBet > 0 && `(${callBet})`}
+                    </button>
+                    <button
+                      className="border p-2 m-2 inline-block"
+                      onClick={() => handleAction("raise")}
+                    >
+                      Raise {callBet > 0 && `(${callBet + 10})`}
+                    </button>
                   </div>
                 )}
-                <hr></hr>
-              </li>
-            ))}
-          </ul>
-          <hr></hr>
-          <h2>Community Cards:</h2>
-          <ul className="flex space-x-2">
-            {gameState.communityCards.map((card, index) => (
-              <li key={index}>
-                <CardUI card={card} />
-              </li>
-            ))}
-          </ul>
-          <hr></hr>
-          <h2>Current Player Index: {gameState.currentPlayerIndex}</h2>
-          <h2>Pot: {gameState.pot}</h2>
-          <h2>Small Blind Index: {gameState.smallBlindIndex}</h2>
-          {winnerInfo && (
-            <div>
-              <h2>Winning Cards:</h2>
-              <p>{winnerName}</p>
-              <p>
-                Cards:
-                <ul className="flex space-x-2">
-                  {winnerInfo.cards.map((card, index) => (
-                    <li key={index}>
-                      <WinnerCardUI card={card} />
-                    </li>
-                  ))}
-                </ul>
-              </p>
-              <p>Description: {winnerInfo.descr}</p>
+              {gameState.players.map((player, index) => (
+                <div key={index} className="w-full text-center">
+                  {userId === player.id && (
+                    <div key={index} className="border m-1 p-1 ">
+                      <strong>{`${index + 1}: ${player.name}`}</strong>
+                      <p>
+                        Chips: {player.chips} - Bet: {player.bet}
+                      </p>
+                      <div>
+                        <div className="flex justify-center space-x-2">
+                          <CardUI card={player.hand[0]} />
+                          <CardUI card={player.hand[1]} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <h2>Current Player Index: {gameState.currentPlayerIndex}</h2>
+              <h2>Pot: {gameState.pot}</h2>
             </div>
-          )}
+            <div>
+              {winnerInfo && (
+                <div>
+                  <h2>Winning Cards:</h2>
+                  <p>{winnerName}</p>
+                  <p>
+                    Cards:
+                    <ul className="flex space-x-2">
+                      {winnerInfo.cards.map((card, index) => (
+                        <li key={index} className="w-1/6">
+                          <WinnerCardUI card={card} />
+                        </li>
+                      ))}
+                    </ul>
+                  </p>
+                  <p>Description: {winnerInfo.descr}</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
+      {/* Buttons for actions */}
     </div>
   );
 };
