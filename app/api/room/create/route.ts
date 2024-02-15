@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     const existingRoom = await Room.findOne({ roomName });
     if (existingRoom) {
       return NextResponse.json(
-        { error: "Room name must be unique" },
+        { error: "Room name already exists" },
         { status: 400 }
       );
     }
